@@ -1,4 +1,4 @@
-# Scenario 1 — Multi‑tier Simple Login App on AWS (Terraform)
+# Scenario 1 — Wordpress Site on AWS (Terraform)
 
 This scenario provisions a highly available, secure baseline for a classic three‑tier web application on AWS using Terraform.
 

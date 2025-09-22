@@ -4,6 +4,8 @@ resource "random_password" "db" {
   min_lower         = 1
   min_numeric       = 1
   min_special       = 1
+  # Exclude characters not allowed by AWS RDS: /, @, ", and space
+  override_special = "!#$%&*()_+-=[]{}|;:,.<>?"
 }
 
 resource "aws_db_subnet_group" "rds" {
@@ -31,7 +33,7 @@ resource "aws_db_instance" "wordpress" {
 
 resource "aws_secretsmanager_secret" "wp_db" {
   # keep secret name stable and lowercase
-  name = "${lower(var.project_name)}-db-credentials-test"
+  name = "${lower(var.project_name)}-db-credentials-test2"
 }
 
 resource "aws_secretsmanager_secret_version" "wp_db_version" {
