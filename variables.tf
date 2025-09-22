@@ -35,17 +35,17 @@ variable "key_name" {
 
 variable "desired_capacity" {
   type    = number
-  default = 1
+  default = 2
 }
 
 variable "min_size" {
   type    = number
-  default = 1
+  default = 2
 }
 
 variable "max_size" {
   type    = number
-  default = 2
+  default = 6
 }
 
 variable "ingress_ssh_cidr" {

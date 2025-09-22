@@ -1,79 +1,74 @@
-# Scenario 1 — Wordpress Site on AWS (Terraform)
+# Scenario 1 — WordPress on AWS (Quickstart)
 
-This scenario provisions a highly available, secure baseline for a classic three‑tier web application on AWS using Terraform.
+Provision a minimal, production‑like WordPress stack on AWS with Terraform: VPC, ALB, Auto Scaling EC2 web tier, EFS for wp‑content, and RDS MySQL. DNS/TLS is www‑only.
 
-It uses reusable modules to stand up:
-- Networking (VPC, subnets, routing)
-- Security (security groups, IAM)
-- Compute (Auto Scaling Group for app servers)
-- Load Balancing (Application Load Balancer)
-- Data (RDS MySQL)
-- Shared storage (EFS)
+## What it creates
 
-The goal is to provide a clean foundation for a Simple Login application (frontend + backend API + MySQL storage) with best practices for availability and security.
+- VPC (2 public subnets for ALB/EC2, 2 private subnets for RDS/EFS)
+- Security groups between ALB ↔ EC2 ↔ RDS/EFS
+- ALB with:
+	- HTTP: redirect to HTTPS for host www.<domain>
+	- HTTPS: forward only for host www.<domain>; default 403
+- ASG + Launch Template (Amazon Linux 2) installing WordPress via `userdata.tpl`
+- RDS MySQL (password stored in Secrets Manager)
+- EFS mounted at `/var/www/html/wp-content`
+- Optional Route53 hosted zone, ACM cert, and `www` A record
 
-## Repository layout
+## Minimal inputs
 
-- `main.tf`, `providers.tf`, `variables.tf`, `outputs.tf` — root stack wiring and configuration
-- `terraform.tfvars` — example values for variables (edit to your needs)
-- `userdata.tpl` — cloud‑init/user data for EC2 instances (install app/runtime, bootstrap)
-- `modules/` — service modules (alb, asg, efs, iam, rds, sg, vpc)
+- `region` (default `ap-south-1`)
+- `project_name` (default `wp-ha`)
+- `domain_name` (optional; enables www DNS/TLS)
+- `hosted_zone_id` (optional; use existing zone)
+- `instance_type` (default `t3.micro`)
+- `desired_capacity`/`min_size`/`max_size` (defaults 2/2/6)
 
-## What gets created (at a glance)
+## Deploy (Windows cmd.exe)
 
-- VPC with public and private subnets across multiple AZs
-- Internet Gateway, route tables for public subnets (and NAT if enabled in module)
-- Application Load Balancer (public) with target group + listeners
-- Auto Scaling Group (private subnets) for application EC2 instances
-- RDS MySQL instance (private subnets)
-- EFS file system (for shared app data/logs if needed)
-- Security groups with least‑privilege rules between tiers
-- IAM roles/policies for EC2 and services as required
+Run in `scenario1`:
 
-Refer to each module’s `variables.tf` for exact knobs and defaults.
-
-## Prerequisites
-
-- Terraform CLI (1.4+ recommended)
-- AWS account and credentials configured (env vars, shared profile, or SSO)
-- Appropriate IAM permissions to create the listed resources
-
-## Configure
-
-1) Review `variables.tf` for available inputs.
-2) Edit `terraform.tfvars` with your values (region, CIDRs, instance type, DB name/user/password, key pair, etc.).
-3) Optionally tailor `userdata.tpl` to install/configure your Simple Login app.
-
-## Deploy (optional commands)
-
-```sh
-# From the scenario1 folder
+```bat
 terraform init
-terraform plan
-terraform apply
+terraform plan -out plan.out
+terraform apply plan.out
 ```
 
-After apply, check outputs for:
-- ALB DNS name (use this to access the app)
-- RDS endpoint (for migrations/seeding)
-- VPC/Subnet IDs, EFS ID (for troubleshooting/ops)
+Example `terraform.tfvars`:
 
-## Destroy (optional)
-
-```sh
-terraform destroy
+```hcl
+region          = "ap-south-1"
+project_name    = "wp-ha"
+domain_name     = "example.com"   # optional
+hosted_zone_id  = "Z123456789ABC" # optional
+instance_type   = "t3.micro"
+desired_capacity = 2
+min_size         = 2
+max_size         = 6
 ```
 
-Note: Some resources (e.g., RDS snapshots, EFS with files, or S3 logs if enabled) may require additional cleanup depending on module settings.
+Outputs to note:
 
-## Security & cost notes
+- `alb_dns_name` — Direct ALB DNS returns 403; use `https://www.<domain>`
+- `db_endpoint` — RDS endpoint
+- `db_password_secret_arn` — DB creds secret
 
-- Resources in this scenario incur AWS costs; destroy when not in use.
-- Restrict inbound traffic to ALB/SSH per your org policy.
-- Store secrets (DB password, etc.) securely (e.g., SSM Parameter Store/Secrets Manager) rather than plain `tfvars`.
+## Scaling (RequestCount)
 
-## Troubleshooting tips
+- ≥30 req/min: capacity 2
+- ≥50 req/min: capacity 4
+- ≥100 req/min: capacity 6
+- <10 req/min for 2 min: scale to 2
 
-- If ALB health checks fail, review the instance user data, SG rules, and target group port/path.
-- Ensure private subnets have egress via NAT (if instances need to reach the Internet for package installs).
-- Check `terraform state list` and module logs for resource details when debugging.
+## Snapshot of the hosted WordPress site
+
+Here’s a placeholder for the site snapshot. Save your screenshot as `images/wordpress-snapshot.png` and it will render below:
+
+![Hosted WordPress Snapshot](./images/wordpress-snapshot.png)
+
+## Troubleshooting
+
+- 403 on ALB DNS: expected (www‑only rules)
+- Targets unhealthy: check `/health.html`, SGs, and user data
+- DNS/TLS pending: wait for Route53/ACM validation
+
+Notes: Launch template uses name_prefix to avoid collisions. Adjust modules and `userdata.tpl` for production (backups, WAF, logging).

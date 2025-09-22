@@ -40,25 +40,12 @@ resource "aws_autoscaling_group" "web_asg" {
   # set explicit name if provided otherwise default
   name                 = var.asg_name != "" ? var.asg_name : "${var.project_name}-web-asg"
   target_group_arns = [var.target_group_arn]
-  default_cooldown = 300
+  default_cooldown = 120
   health_check_grace_period = 180
   tag {
     key                 = "Name"
     value               = "${var.project_name}-web"
     propagate_at_launch = true
-  }
-}
-
-resource "aws_autoscaling_policy" "cpu_target" {
-  name = "${var.project_name}-cpu-target"
-  autoscaling_group_name = aws_autoscaling_group.web_asg.name
-  policy_type = "TargetTrackingScaling"
-
-  target_tracking_configuration {
-    predefined_metric_specification {
-      predefined_metric_type = "ASGAverageCPUUtilization"
-    }
-    target_value = 60.0
   }
 }
 

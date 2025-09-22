@@ -33,7 +33,7 @@ resource "aws_db_instance" "wordpress" {
 
 resource "aws_secretsmanager_secret" "wp_db" {
   # keep secret name stable and lowercase
-  name = "${lower(var.project_name)}-db-credentials-test2"
+  name = "${lower(var.project_name)}-db-credentials-2"
 }
 
 resource "aws_secretsmanager_secret_version" "wp_db_version" {

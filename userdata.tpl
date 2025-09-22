@@ -181,6 +181,7 @@ if [ "${db_endpoint}" != "" ]; then
       echo "wp-cli not available; skipping automatic install."
     fi
   fi
+
 fi
 
 systemctl restart $SERVICE_NAME || true

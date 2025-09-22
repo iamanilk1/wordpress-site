@@ -21,15 +21,21 @@ resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.alb.arn
   port              = 80
   protocol          = "HTTP"
+  # Block direct access by default; allow only via host-header rule below
   default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.tg.arn
+    type = "fixed-response"
+    fixed_response {
+      content_type = "text/plain"
+      message_body = "Forbidden"
+      status_code  = "403"
+    }
   }
 }
 
 resource "aws_acm_certificate" "cert" {
   count = var.domain_name == "" ? 0 : 1
-  domain_name = var.domain_name
+  # Issue certificate for the www subdomain only
+  domain_name       = "www.${var.domain_name}"
   validation_method = "DNS"
 }
 
@@ -55,17 +61,65 @@ resource "aws_lb_listener" "https" {
   protocol          = "HTTPS"
   ssl_policy        = "ELBSecurityPolicy-2016-08"
   certificate_arn   = aws_acm_certificate_validation.cert_validation[0].certificate_arn
+  # Block direct access by default; allow only via host-header rule below
   default_action {
+    type = "fixed-response"
+    fixed_response {
+      content_type = "text/plain"
+      message_body = "Forbidden"
+      status_code  = "403"
+    }
+  }
+  depends_on = [aws_acm_certificate_validation.cert_validation]
+}
+
+# Allow only requests for our domain on HTTP: redirect to HTTPS
+resource "aws_lb_listener_rule" "http_redirect_to_https" {
+  count        = var.domain_name == "" ? 0 : 1
+  listener_arn = aws_lb_listener.http.arn
+  priority     = 1
+
+  action {
+    type = "redirect"
+    redirect {
+      # Preserve the original host (should be www.<domain>)
+      host        = "#{host}"
+      port        = "443"
+      protocol    = "HTTPS"
+      status_code = "HTTP_301"
+    }
+  }
+
+  condition {
+    host_header {
+      values = ["www.${var.domain_name}"]
+    }
+  }
+}
+
+# Allow only requests for our domain on HTTPS: forward to target group
+resource "aws_lb_listener_rule" "https_forward_to_tg" {
+  count        = var.domain_name == "" ? 0 : 1
+  listener_arn = aws_lb_listener.https[0].arn
+  priority     = 1
+
+  action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.tg.arn
   }
-  depends_on = [aws_acm_certificate_validation.cert_validation]
+
+  condition {
+    host_header {
+      values = ["www.${var.domain_name}"]
+    }
+  }
 }
 
 resource "aws_route53_record" "www" {
   count = var.domain_name == "" ? 0 : 1
   zone_id = var.hosted_zone_id
-  name    = var.domain_name
+  # Create only the www record pointing to ALB
+  name    = "www"
   type    = "A"
   alias {
     name                   = aws_lb.alb.dns_name

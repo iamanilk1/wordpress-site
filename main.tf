@@ -82,7 +82,8 @@ module "asg" {
   desired_capacity = var.desired_capacity
   min_size = var.min_size
   max_size = var.max_size
-  launch_template_name = "${var.project_name}-web-lt"
+  # Use name_prefix in module to avoid name collisions when re-applying
+  launch_template_name = ""
   asg_name = "${var.project_name}-web-asg"
 }
 
@@ -92,19 +93,80 @@ data "aws_caller_identity" "current" {}
 
 
 /* Target-tracking scaling on ALB requests per target */
-resource "aws_autoscaling_policy" "alb_request_target" {
-  name                   = "${var.project_name}-alb-request-target"
+## Step scaling based on ALB Target Group RequestCount (www only)
+resource "aws_autoscaling_policy" "scale_out_step" {
+  name                   = "${var.project_name}-scale-out-step"
   autoscaling_group_name = module.asg.asg_name
-  policy_type            = "TargetTrackingScaling"
+  policy_type            = "StepScaling"
+  adjustment_type        = "ExactCapacity"
 
-  target_tracking_configuration {
-    predefined_metric_specification {
-      predefined_metric_type = "ALBRequestCountPerTarget"
-      # AWS expects the load balancer portion first, then the target group
-      resource_label = "${module.alb.alb_arn_suffix}/${module.alb.tg_arn_suffix}"
-    }
-    target_value = 100.0
+  # With a single alarm at threshold 30, these bounds are differences over 30
+  # 30-49 (diff 0-19) => capacity 2
+  step_adjustment {
+    metric_interval_lower_bound = 0
+    metric_interval_upper_bound = 20
+    scaling_adjustment          = 2
   }
+  # 50-99 (diff 20-69) => capacity 4
+  step_adjustment {
+    metric_interval_lower_bound = 20
+    metric_interval_upper_bound = 70
+    scaling_adjustment          = 4
+  }
+  # 100+ (diff >=70) => capacity 6 (max)
+  step_adjustment {
+    metric_interval_lower_bound = 70
+    scaling_adjustment          = 6
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "req_gt_30" {
+  alarm_name          = "${var.project_name}-requests-gt-30"
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  evaluation_periods  = 1
+  metric_name         = "RequestCount"
+  namespace           = "AWS/ApplicationELB"
+  period              = 60
+  statistic           = "Sum"
+  threshold           = 30
+  alarm_description   = "Requests >= 30 in 1 minute on www"
+  dimensions = {
+    TargetGroup  = module.alb.tg_arn_suffix
+    LoadBalancer = module.alb.alb_arn_suffix
+  }
+  alarm_actions = [aws_autoscaling_policy.scale_out_step.arn]
+}
+
+// Removed additional alarms; single alarm drives step policy via difference from threshold
+
+resource "aws_autoscaling_policy" "scale_in_exact_1" {
+  name                   = "${var.project_name}-scale-in-1"
+  autoscaling_group_name = module.asg.asg_name
+  policy_type            = "StepScaling"
+  adjustment_type        = "ExactCapacity"
+  step_adjustment {
+    # For a LessThanThreshold alarm, use an upper bound of 0 to cover all
+    # values below the threshold; avoids a positive upper bound requirement.
+    metric_interval_upper_bound = 0
+    scaling_adjustment          = 2
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "req_lt_10" {
+  alarm_name          = "${var.project_name}-requests-lt-10"
+  comparison_operator = "LessThanThreshold"
+  evaluation_periods  = 2
+  metric_name         = "RequestCount"
+  namespace           = "AWS/ApplicationELB"
+  period              = 60
+  statistic           = "Sum"
+  threshold           = 10
+  alarm_description   = "Requests < 10 for 2 minutes on www"
+  dimensions = {
+    TargetGroup  = module.alb.tg_arn_suffix
+    LoadBalancer = module.alb.alb_arn_suffix
+  }
+  alarm_actions = [aws_autoscaling_policy.scale_in_exact_1.arn]
 }
 
 
