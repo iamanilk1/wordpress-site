@@ -1,5 +1,7 @@
 # Scenario 1 — WordPress on AWS (Quickstart)
 
+**🌐 You can browse the website at https://www.iamanilk.space**
+
 Provision a minimal, production‑like WordPress stack on AWS with Terraform: VPC, ALB, Auto Scaling EC2 web tier, EFS for wp‑content, and RDS MySQL. DNS/TLS is www‑only.
 
 ## What it creates
