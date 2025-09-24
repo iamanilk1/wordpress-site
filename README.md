@@ -2,7 +2,7 @@
 
 **🌐 You can browse the website at https://www.iamanilk.space**
 
-**Note: Due to domain cost considerations, only Scenario 2 is currently deployed and accessible. While the live deployment will be decommissioned in couple of days, all three scenarios (1, 2, and 3) include complete Terraform configurations for infrastructure provisioning.**
+**Note: Due to domain cost considerations, a single domain was used for testing all scenarios. Currently, all three scenarios are offline, but each can be fully deployed using the provided Terraform scripts.**
 
 Provision a minimal, production‑like WordPress stack on AWS with Terraform: VPC, ALB, Auto Scaling EC2 web tier, EFS for wp‑content, and RDS MySQL. DNS/TLS is www‑only.
 
